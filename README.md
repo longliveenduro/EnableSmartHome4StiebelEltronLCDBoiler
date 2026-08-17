@@ -21,6 +21,7 @@ Ein `template:`-Block mit drei Triggern (stündlich, HA-Start, nach SwitchBot-Ta
 - **`display_mode` als Leitplanke:** Ohne expliziten Hinweis hat Gemini bei `display_mode: "standard"` trotzdem gelegentlich eine (halluzinierte) Zieltemperatur für `target_temp_c` geliefert. Fix: eine explizite Zeile direkt nach der Liter-Beschreibung im Prompt, die klarstellt, dass die Zieltemperatur in diesem Modus NICHT angezeigt wird und -1 zurückzugeben ist.
 - **"Beschreibe-erst-dann-entscheide"-Muster für alle vier Symbol-Booleans:** Für jedes der vier Symbole (Heizung, Verkalkung, Störung, ECO) gibt es ein Text-Feld direkt vor dem zugehörigen Boolean im Schema. Bei strukturierter JSON-Ausgabe generiert das Modell die Felder in Schema-Reihenfolge, muss sich also erst in Worten festlegen, was es sieht, bevor es die Bool-Entscheidung trifft – das hat beim Heizsymbol eine reale Fehlklassifizierung behoben.
 - **Feste Positionen laut Anleitung (S. 6 und 8):** ECO oben rechts über "l". Heizsymbol links unten, direkt über "WW". "Ca" und das Schraubenschlüssel-Symbol unten rechts neben "WW" (andere Ecke als das Heizsymbol) – die genaue Reihenfolge der beiden zueinander ist aus der Anleitung nicht eindeutig ablesbar, aber "rechts neben WW" grenzt die Suche für das Modell gut ein.
+- **"expected a number"-Fehler bei den Zahlen-Sensoren:** Solange `sensor.boiler_mischwassermenge`/`_zieltemperatur` noch nie einen gültigen Wert hatten, ist ihr eigener `this.state` selbst der Text `"unknown"` – und das als Fallback zurückzugeben, verletzt `state_class: measurement` (verlangt eine Zahl). Fix: Fallback gibt `none` zurück statt des Textes `"unknown"`, wenn `this.state` selbst `unknown`/`unavailable` ist.
 
 ---
 
@@ -30,6 +31,16 @@ Ein `template:`-Block mit drei Triggern (stündlich, HA-Start, nach SwitchBot-Ta
 2. Einstellungen → Geräte & Dienste → Integration hinzufügen → „LLM Vision".
 3. Als Provider **Google Gemini** wählen, API-Key eintragen, z. B. „Google Gemini" als Name vergeben.
 4. Provider-ID: Entwicklertools → Aktionen → „LLM Vision: Bild-Analysator" → Provider in der UI auswählen → auf „In YAML bearbeiten" umschalten, ID kopieren.
+
+### Optional: Fallback-Provider (Ausfallsicherheit)
+
+Geräte & Dienste → LLM Vision → Eintrag **„LLM Vision Settings"** (separat von den einzelnen Provider-Einträgen!) → General:
+- **Fallback provider:** Ein zweiter, bereits eingerichteter Provider – funktioniert auch mit demselben Anbieter, aber anderem Modell (z. B. Google Gemini 3.5 Flash Lite als Fallback für Google Gemini 3.7 Flash).
+- **Request timeout:** Standard 60 Sek., ggf. auf 90–120 hochsetzen, da Gemini bei aktivem Thinking gelegentlich länger braucht als 60 Sek. (Ursache für den einmaligen `TimeoutError`, den wir hatten).
+
+**Falle beim Einrichten:** Falls du mehrere Provider vom selben Typ hast (z. B. zwei "Google"-Einträge), zeigt die Fallback-Auswahl beide nur als "Google" an, ohne nach Modell zu unterscheiden. Um sicherzugehen, welcher gemeint ist: einen der beiden Provider-Einträge kurz deaktivieren, im Settings-Dialog prüfen welche Option dann fehlt, wieder aktivieren.
+
+Das ist eine reine Integrations-Einstellung – an der YAML unten ändert sich dadurch nichts, der Fallback greift transparent im Hintergrund.
 
 ---
 
@@ -178,8 +189,8 @@ template:
     action:
       - action: llmvision.image_analyzer
         data:
-          provider: "DEINE_PROVIDER_ID"    # In der UI aus der Dropdown-Liste wählen
-          model: gemini-3.6-flash          # aktuell wegen Auslastung von 3.7 im Einsatz
+          provider: "01M08BKMWZAV6K2QV02N8A1P7R"    # In der UI aus der Dropdown-Liste wählen
+          model: gemini-3.5-flash-lite          # aktuell wegen Auslastung von 3.7 im Einsatz
           image_entity:
             - camera.reolink_boiler_fluent
           include_filename: false
@@ -313,8 +324,9 @@ template:
         variables:
           raw: "{{ (boiler_vision.response_text | default('')) | replace('```json','') | replace('```','') | trim }}"
           data: "{{ (raw | from_json) if raw.startswith('{') else None }}"
+          fallback: "{{ none if this.state in ['unknown', 'unavailable'] else this.state }}"
         state: >
-          {{ (data.liters if (data and data.display_mode == 'standard' and 0 <= data.liters <= 300) else this.state) }}
+          {{ (data.liters if (data and data.display_mode == 'standard' and 0 <= data.liters <= 300) else fallback) }}
 
       - name: "Boiler Zieltemperatur"
         unique_id: boiler_zieltemperatur
@@ -324,8 +336,9 @@ template:
         variables:
           raw: "{{ (boiler_vision.response_text | default('')) | replace('```json','') | replace('```','') | trim }}"
           data: "{{ (raw | from_json) if raw.startswith('{') else None }}"
+          fallback: "{{ none if this.state in ['unknown', 'unavailable'] else this.state }}"
         state: >
-          {{ (data.target_temp_c if (data and data.display_mode == 'temperature' and 20 <= data.target_temp_c <= 85) else this.state) }}
+          {{ (data.target_temp_c if (data and data.display_mode == 'temperature' and 20 <= data.target_temp_c <= 85) else fallback) }}
 
     binary_sensor:
       - name: "Boiler heizt"
