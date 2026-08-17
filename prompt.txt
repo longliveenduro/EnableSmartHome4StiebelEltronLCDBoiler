@@ -1,0 +1,22 @@
+
+Ich habe eine Webcam auf meinen nicht SmartHome-fähigen Boiler Stiebel Eltron 80 LCD gerichtet. 
+Ziel ist es den Inhalt des Displays nicht als Kamera Bild, sondern als echte Sensoren in Home Assistant zu integrieren. 
+
+Siehe Screenshot des Standard Display Screen mit verfügbarer Mischwassermenge (200 Liter) in der Mitte und links unten, ob gerade aufgeheizt wird. (in dem Screenshot wird nicht aufgeheizt, da 3 vertikale Wellenlinien über der immer dargestellten gezackten horizontalen Linie fehlen).
+
+Ich habe bereits 2 Switchbots angebracht, die die gewünschte Temperatur erhöhen oder erniedrigen (Maximal ist 85 Grad).
+Wenn man die + bzw - Tasten drückt, verschwindet die Standardanzeige und die Zieltemperatur wird angezeigt, die sich während des Switchbot Drückens kontinuierlich verändert.
+
+Die Switchbots sind so konfiguriert, dass sie die Tasten mehrere Sekunden halten, so daß man von den aktuellen 40 Grad (händisch von mir manuell eingestellt) auf 85 Grad (max) mit einem Switchbot Befehl kommt, und von dort wieder mit einem Befehl runter auf circa die 40 Grad. Das dauert ein paar Sekunden (ca 8 sec). Und es kann auch bei 39 oder 41 oder 38 landen. Der Befehl für Temp hoch ist extra etwas länger, da 85 Grad max ist und bei weiterem Drücken die Temperatur nicht weiter hochgeht, man aber sicher sein kann, das 85 Grad erreicht wird.
+
+Sowohl die Reolink Kamera als auch die Switchbots sind schon in Home Assistant integriert:
+
+Entity ID: camera.reolink_boiler_fluent
+Boiler Temp hoch: switch.bot_85
+Boiler Temp runter: switch.bot_6b
+
+Die Hauptstromversorgung des Boilers (sensor.boilermain_smartplug_10_power), sowie die EVU (Energieversorgungsunternehmen) Phase (Switchbare Steckdose: switch.boiler_evu_control_smartplug_8) hängen an jeweils einer smarten Wifi Steckdose, mit dem ich dann den Stromverbrauch (für Hauptstromversorgung) und die erlaubten Aufheizzeiten (mittels EVU Phase) steuern kann. Siehe Home Assistant Dashboard Card.
+
+Ich möchte die aktuellen Werte des Displays als echte Daten-Sensoren in meinen Home Assistant haben.
+
+Ich denke das HACS Plugin LLM Vision ist gut geeignet und ich möchte Gemini Flash 3.7 zur Bilderkennung verwenden. Ich hab für Google bereits einen API Key.

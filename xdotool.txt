@@ -1,0 +1,2 @@
+while [ "$(date +%H:%M)" != "04:55" ]; do sleep 10; done && xdotool key Return && sleep 1 && xdotool key ctrl+Return
+
