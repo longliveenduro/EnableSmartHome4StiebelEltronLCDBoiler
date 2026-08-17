@@ -1,1 +1,2 @@
-# EnableSmartHome4StiebelEltronLCDBoiler
+# Makes Stiebel Eltron LCD Boilers available in Home Assistant
+
