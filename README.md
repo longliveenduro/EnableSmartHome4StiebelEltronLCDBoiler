@@ -21,7 +21,7 @@ Ein `template:`-Block mit drei Triggern (stündlich, HA-Start, nach SwitchBot-Ta
 - **`display_mode` als Leitplanke:** Ohne expliziten Hinweis hat Gemini bei `display_mode: "standard"` trotzdem gelegentlich eine (halluzinierte) Zieltemperatur für `target_temp_c` geliefert. Fix: eine explizite Zeile direkt nach der Liter-Beschreibung im Prompt, die klarstellt, dass die Zieltemperatur in diesem Modus NICHT angezeigt wird und -1 zurückzugeben ist.
 - **"Beschreibe-erst-dann-entscheide"-Muster für alle vier Symbol-Booleans:** Für jedes der vier Symbole (Heizung, Verkalkung, Störung, ECO) gibt es ein Text-Feld direkt vor dem zugehörigen Boolean im Schema. Bei strukturierter JSON-Ausgabe generiert das Modell die Felder in Schema-Reihenfolge, muss sich also erst in Worten festlegen, was es sieht, bevor es die Bool-Entscheidung trifft – das hat beim Heizsymbol eine reale Fehlklassifizierung behoben.
 - **Feste Positionen laut Anleitung (S. 6 und 8):** ECO oben rechts über "l". Heizsymbol links unten, direkt über "WW". "Ca" und das Schraubenschlüssel-Symbol unten rechts neben "WW" (andere Ecke als das Heizsymbol) – die genaue Reihenfolge der beiden zueinander ist aus der Anleitung nicht eindeutig ablesbar, aber "rechts neben WW" grenzt die Suche für das Modell gut ein.
-- **"expected a number"-Fehler bei den Zahlen-Sensoren:** Solange `sensor.boiler_mischwassermenge`/`_zieltemperatur` noch nie einen gültigen Wert hatten, ist ihr eigener `this.state` selbst der Text `"unknown"` – und das als Fallback zurückzugeben, verletzt `state_class: measurement` (verlangt eine Zahl). Fix: Fallback gibt `none` zurück statt des Textes `"unknown"`, wenn `this.state` selbst `unknown`/`unavailable` ist.
+- **"expected a number"-Fehler bei den Zahlen-Sensoren:** Solange `sensor.boiler_mischwassermenge`/`_zieltemperatur` noch nie einen gültigen Wert hatten, ist ihr eigener `this.state` selbst der Text `"unknown"` – und das als Fallback zurückzugeben, verletzt `state_class: measurement` (verlangt eine Zahl). **Wichtig:** `this` funktioniert nur in `state:`/`attributes:` selbst, NICHT innerhalb von `variables:` – dort ist es noch nicht definiert und wirft `TemplateError: 'this' is undefined`, was die komplette Action bei jedem Trigger crashen lässt (bei mir live beobachtet, über mehrere Stunden). Der Fallback gehört daher direkt in die `state:`-Zeile, nicht in `variables:`.
 
 ---
 
@@ -189,8 +189,8 @@ template:
     action:
       - action: llmvision.image_analyzer
         data:
-          provider: "01M08BKMWZAV6K2QV02N8A1P7R"    # In der UI aus der Dropdown-Liste wählen
-          model: gemini-3.5-flash-lite          # aktuell wegen Auslastung von 3.7 im Einsatz
+          provider: "DEINE_PROVIDER_ID"    # In der UI aus der Dropdown-Liste wählen
+          model: gemini-3.6-flash          # aktuell wegen Auslastung von 3.7 im Einsatz
           image_entity:
             - camera.reolink_boiler_fluent
           include_filename: false
@@ -324,9 +324,8 @@ template:
         variables:
           raw: "{{ (boiler_vision.response_text | default('')) | replace('```json','') | replace('```','') | trim }}"
           data: "{{ (raw | from_json) if raw.startswith('{') else None }}"
-          fallback: "{{ none if this.state in ['unknown', 'unavailable'] else this.state }}"
         state: >
-          {{ (data.liters if (data and data.display_mode == 'standard' and 0 <= data.liters <= 300) else fallback) }}
+          {{ (data.liters if (data and data.display_mode == 'standard' and 0 <= data.liters <= 300) else (none if this.state in ['unknown', 'unavailable'] else this.state)) }}
 
       - name: "Boiler Zieltemperatur"
         unique_id: boiler_zieltemperatur
@@ -336,9 +335,8 @@ template:
         variables:
           raw: "{{ (boiler_vision.response_text | default('')) | replace('```json','') | replace('```','') | trim }}"
           data: "{{ (raw | from_json) if raw.startswith('{') else None }}"
-          fallback: "{{ none if this.state in ['unknown', 'unavailable'] else this.state }}"
         state: >
-          {{ (data.target_temp_c if (data and data.display_mode == 'temperature' and 20 <= data.target_temp_c <= 85) else fallback) }}
+          {{ (data.target_temp_c if (data and data.display_mode == 'temperature' and 20 <= data.target_temp_c <= 85) else (none if this.state in ['unknown', 'unavailable'] else this.state)) }}
 
     binary_sensor:
       - name: "Boiler heizt"
